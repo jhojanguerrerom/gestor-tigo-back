@@ -246,6 +246,7 @@ class LiquidationData(BaseModel):
     municipio: Optional[str]
     pedido_crm: Optional[str]
     usuario_pendiente: Optional[str]
+    fecha_ingreso_gestor: Optional[str]
     fecha_asignacion: datetime
     fecha_gestion: datetime
     nombre_accion: Optional[str]

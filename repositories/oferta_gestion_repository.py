@@ -364,7 +364,7 @@ class OfertaGestionRepository:
                     EnlistmentManager.estado_oferta == 'ABIERTO',
                     func.upper(func.trim(
                         EnlistmentManager.campos_dinamicos['concepto'].astext
-                    )).notin_(CONCEPTOS_ANULACION + CONCEPTOS_EXCLUIDOS_ALEATORIO),
+                    )).notin_(CONCEPTOS_ANULACION),
                     EnlistmentManager.campos_dinamicos['concepto'].astext.isnot(None),
                     EnlistmentManager.campos_dinamicos['concepto'].astext != ''
                 )

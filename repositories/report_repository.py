@@ -706,7 +706,8 @@ class ReportRepository:
     ) -> Tuple[List[Any], int]:
         """
         Obtiene reporte de liquidación usando Raw SQL.
-        Retorna ofertas cerradas con validación de garantía.
+        Retorna ofertas cerradas con validación de garantía, usando el estándar
+        de zona horaria de Bogotá y formato de fechas DD-MM-YYYY HH:MI:SS.
         
         Args:
             date_from: Fecha inicio del periodo
@@ -721,15 +722,15 @@ class ReportRepository:
             start_timestamp = datetime.combine(date_from, datetime.min.time())
             end_timestamp = datetime.combine(date_to, datetime.max.time())
             
-            # Query base con CTEs (Raw SQL)
+            # Query base con CTEs (Raw SQL) usando TIMEZONE('America/Bogota', ...)
             sql_query = text("""
                 WITH estados AS (
                     SELECT
                         ohe.oferta,
                         ohe.usuario_login,
                         ohe.usuario_nombre,
-                        ohe.fecha_accion AS fecha_asignacion,
-                        LEAD(ohe.fecha_accion) OVER (PARTITION BY ohe.oferta ORDER BY ohe.fecha_accion) AS fecha_gestion,
+                        TIMEZONE('America/Bogota', ohe.fecha_accion) AS fecha_asignacion,
+                        TIMEZONE('America/Bogota', LEAD(ohe.fecha_accion) OVER (PARTITION BY ohe.oferta ORDER BY ohe.fecha_accion)) AS fecha_gestion,
                         LEAD(ohe.estado_nuevo) OVER (PARTITION BY ohe.oferta ORDER BY ohe.fecha_accion) AS siguiente_estado
                     FROM oferta_historico_estados ohe
                     WHERE ohe.fecha_accion >= :start_date AND ohe.fecha_accion < :end_date
@@ -754,12 +755,12 @@ class ReportRepository:
                         oac.nombre_accion,
                         osc.nombre_subaccion,
                         ogd.observacion,
-                        ogd.fecha_gestion AS fecha_gestion_detalle,
-                        ABS(EXTRACT(EPOCH FROM (c.fecha_gestion - ogd.fecha_gestion))) * 1000 AS diferencia_ms,
-                        ROW_NUMBER() OVER (PARTITION BY c.oferta, c.fecha_gestion ORDER BY ABS(EXTRACT(EPOCH FROM (c.fecha_gestion - ogd.fecha_gestion)))) AS rn
+                        TIMEZONE('America/Bogota', ogd.fecha_gestion) AS fecha_gestion_detalle,
+                        ABS(EXTRACT(EPOCH FROM (c.fecha_gestion - TIMEZONE('America/Bogota', ogd.fecha_gestion)))) * 1000 AS diferencia_ms,
+                        ROW_NUMBER() OVER (PARTITION BY c.oferta, c.fecha_gestion ORDER BY ABS(EXTRACT(EPOCH FROM (c.fecha_gestion - TIMEZONE('America/Bogota', ogd.fecha_gestion))))) AS rn
                     FROM cierres c
                     LEFT JOIN oferta_gestion_detalle ogd ON ogd.oferta = c.oferta 
-                        AND ogd.fecha_gestion BETWEEN c.fecha_gestion - INTERVAL '1 second' AND c.fecha_gestion + INTERVAL '1 second'
+                        AND TIMEZONE('America/Bogota', ogd.fecha_gestion) BETWEEN c.fecha_gestion - INTERVAL '1 second' AND c.fecha_gestion + INTERVAL '1 second'
                     LEFT JOIN oferta_accion_catalogo oac ON oac.id = ogd.accion_id
                     LEFT JOIN oferta_subaccion_catalogo osc ON osc.id = ogd.subaccion_id
                 ),
@@ -791,8 +792,11 @@ class ReportRepository:
                         cd.municipio,
                         cd.pedido_crm,
                         cd.usuario_pendiente,
-                        gm.fecha_asignacion,
-                        gm.fecha_gestion,
+                        -- Fecha de ingreso de la oferta al gestor con zona horaria de Bogotá y formato DD-MM-YYYY HH:MI:SS
+                        TO_CHAR(TIMEZONE('America/Bogota', em.created_at), 'DD-MM-YYYY HH24:MI:SS') AS fecha_ingreso_gestor,
+                        -- Demás fechas formateadas a DD-MM-YYYY HH:MI:SS
+                        TO_CHAR(gm.fecha_asignacion, 'DD-MM-YYYY HH24:MI:SS') AS fecha_asignacion,
+                        TO_CHAR(gm.fecha_gestion, 'DD-MM-YYYY HH24:MI:SS') AS fecha_gestion,
                         gm.nombre_accion,
                         gm.nombre_subaccion,
                         gm.observacion,
@@ -833,12 +837,12 @@ class ReportRepository:
                 SELECT
                     r.*,
                     CASE
-                        WHEN COUNT(*) OVER (PARTITION BY r.oferta) = 1 THEN 'NO GARANTIA'
+                        WHEN COUNT(*) OVER (PARTITION BY r.oferta) = 1 THEN 'NO ES GARANTIA'
                         WHEN ROW_NUMBER() OVER (
                                 PARTITION BY r.oferta
                                 ORDER BY r.fecha_gestion DESC
-                             ) = 1 THEN 'NO GARANTIA'
-                        ELSE 'SI GARANTIA'
+                             ) = 1 THEN 'NO ES GARANTIA'
+                        ELSE 'SI ES GARANTIA'
                     END AS validacion_garantia
                 FROM resultado r
                 ORDER BY r.oferta, r.fecha_gestion DESC
