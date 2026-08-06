@@ -308,6 +308,7 @@ class AutomationService:
                     'Premisas Extendidas',
                     'ANULA-C',
                     'Envío diseño',
+                    'Normalizacion'
                 ]
                 
                 # Validación 1

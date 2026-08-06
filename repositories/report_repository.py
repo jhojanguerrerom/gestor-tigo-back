@@ -782,6 +782,9 @@ class ReportRepository:
                         cd.tipo_trabajo,
                         cd.fecha_creado,
                         cd.descripcion,
+                        cd.direccion,
+                        cd.latitude AS latitud,
+                        cd.longitude AS longitud,
                         cd.estado_direccion,
                         em.estado_oferta,
                         cd.estado_pendiente,
@@ -830,7 +833,10 @@ class ReportRepository:
                         tipo_scoring text,
                         tipo_trabajo text,
                         uen text,
-                        usuario_pendiente text
+                        usuario_pendiente text,
+                        direccion text,
+                        latitude text,
+                        longitude text
                     )
                     WHERE gm.rn = 1
                 )

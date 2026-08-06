@@ -236,6 +236,9 @@ class LiquidationData(BaseModel):
     tipo_trabajo: Optional[str]
     fecha_creado: Optional[str]
     descripcion: Optional[str]
+    direccion: Optional[str]
+    latitud: Optional[str]
+    longitud: Optional[str]
     estado_direccion: Optional[str]
     estado_oferta: str
     estado_pendiente: Optional[str]

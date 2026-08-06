@@ -609,7 +609,7 @@ class ReportService:
 
     def generate_cancellations_csv(self, days_back: int = 3) -> str:
         """
-        Genera CSV de ofertas canceladas (ANULA, ANULA-C, ANULA-D).
+        Genera CSV de ofertas canceladas (ANULA, ANULA-C, ANULA-D, ANULA-N).
         
         Args:
             days_back: Días hacia atrás desde hoy
@@ -621,13 +621,15 @@ class ReportService:
             motivo_map = {
                 'ANULA': 'Garantia en el ingreso',
                 'ANULA-C': 'Garantia en el ingreso',
-                'ANULA-D': 'Motivo tecnico'
+                'ANULA-D': 'Motivo tecnico',
+                'ANULA-N': 'Garantía en el Ingreso'
             }
             
             observaciones_map = {
                 'ANULA': 'Inconsistencia en el flujo',
                 'ANULA-C': 'Inconsistencia en el flujo',
-                'ANULA-D': 'Anulado por disponibilidad tecnica'
+                'ANULA-D': 'Anulado por disponibilidad tecnica',
+                'ANULA-N': 'Sintaxis incorrecta o Municipio no activo'
             }
             
             # Obtener datos del repository
@@ -742,6 +744,9 @@ class ReportService:
                     'tipo_trabajo': row.tipo_trabajo,
                     'fecha_creado': row.fecha_creado,
                     'descripcion': row.descripcion,
+                    'direccion': row.direccion,
+                    'latitud': row.latitud,
+                    'longitud': row.longitud,
                     'estado_direccion': row.estado_direccion,
                     'estado_oferta': row.estado_oferta,
                     'estado_pendiente': row.estado_pendiente,
@@ -821,6 +826,9 @@ class ReportService:
                 'Tipo Trabajo',
                 'Fecha Creado',
                 'Descripcion',
+                'Direccion',
+                'Latitud',
+                'Longitud',
                 'Estado Direccion',
                 'Estado Oferta',
                 'Estado Pendiente',
@@ -859,6 +867,9 @@ class ReportService:
                     row.tipo_trabajo or '',
                     row.fecha_creado or '',
                     row.descripcion or '',
+                    row.direccion or '',
+                    row.latitud or '',
+                    row.longitud or '',
                     row.estado_direccion or '',
                     row.estado_oferta,
                     row.estado_pendiente or '',
