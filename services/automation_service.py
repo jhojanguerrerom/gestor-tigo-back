@@ -164,6 +164,27 @@ class AutomationService:
             # ==========================================
             
             # ==========================================
+            # Bloque de Validación ANULA-N (Direcciones estado 'C' y 'y' no reconocidas)
+            # ==========================================
+             # Inicializar columna validacion_anulacion
+            df_merged['validacion_anulacion'] = None
+            logger.info("Columna 'validacion_anulacion' inicializada")
+            mask_validacion_anula_n = (
+                (df_merged['concepto'] == 'Normalizacion') &
+                (df_merged['estado_pendiente'] == 'Abierto') &
+                (
+                    (df_merged['estado_direccion'].astype(str).str.contains('C', na=False)) |
+                    (df_merged['estado_direccion'].astype(str).str.contains('y', na=False))
+                )
+            )
+            
+            count_validacion_anula_n = mask_validacion_anula_n.sum()
+            if count_validacion_anula_n > 0:
+                df_merged.loc[mask_validacion_anula_n, 'concepto'] = 'ANULA-N'
+                df_merged.loc[mask_validacion_anula_n, 'validacion_anulacion'] = 'DIRECCION_NO_RECONOCIDA'
+                logger.info(f"Validación ANULA-N: {count_validacion_anula_n} registros actualizados - validacion_anulacion: DIRECCION_NO_RECONOCIDA")
+
+            # ==========================================
             # Bloque de Validacion ANULA-C
             # Inicializar columna validacion_anulacion
             df_merged['validacion_anulacion'] = None
@@ -353,6 +374,10 @@ class AutomationService:
                 
                 # Validación 7
                 if (row.get('concepto_original') in concepto_matriz):
+                    return 'Eliana Henao'
+
+                # Validación para ANULA-N
+                if row.get('concepto') == 'ANULA-N':
                     return 'Eliana Henao'
                 
                 return None

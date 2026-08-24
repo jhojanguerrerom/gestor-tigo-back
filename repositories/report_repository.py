@@ -20,7 +20,7 @@ logger = logging.getLogger("report_repository")
 # ==========================================
 # CONSTANTES: Agrupación de conceptos
 # ==========================================
-CONCEPTS_ANULAR = ['ANULA', 'ANULA-C', 'ANULA-D']
+CONCEPTS_ANULAR = ['ANULA', 'ANULA-C', 'ANULA-D', 'ANULA-N']
 CONCEPTS_RECONFIGURACION = ['Premisas Extendidas', '14', 'RECONFIGURACION BOT']
 CONCEPTS_ASIGNACION = [
     'Cobertura', 'Conservar Numero', 'PETEC', 'PRESI', 'PSIEB', 'PUMED',
@@ -659,7 +659,7 @@ class ReportRepository:
         days_back: int = 3
     ) -> List[Tuple]:
         """
-        Obtiene ofertas con conceptos de cancelación (ANULA, ANULA-C, ANULA-D)
+        Obtiene ofertas con conceptos de cancelación (ANULA, ANULA-C, ANULA-D, ANULA-N)
         para exportación en formato CSV.
         
         Args:
@@ -680,7 +680,7 @@ class ReportRepository:
                     EnlistmentManager.updated_at >= cutoff_date,
                     EnlistmentManager.updated_at <= now,
                     EnlistmentManager.estado_oferta == 'ABIERTO',
-                    EnlistmentManager.campos_dinamicos['concepto'].astext.in_(['ANULA', 'ANULA-C', 'ANULA-D'])
+                    EnlistmentManager.campos_dinamicos['concepto'].astext.in_(['ANULA', 'ANULA-C', 'ANULA-D', 'ANULA-N'])
                 )
             ).order_by(
                 EnlistmentManager.updated_at.asc()
@@ -804,7 +804,7 @@ class ReportRepository:
                         gm.nombre_subaccion,
                         gm.observacion,
                         case
-                            when cd.concepto IN('ANULA', 'ANULA-C', 'ANULA-D') then 'ANULAR'
+                            when cd.concepto IN('ANULA', 'ANULA-C', 'ANULA-D', 'ANULA-N') then 'ANULAR'
                             when cd.concepto IN('Premisas Extendidas', '14', 'RECONFIGURACION BOT') then 'RECONFIGURACION'
                             when cd.concepto IN('Cobertura', 'Conservar Numero', 'PETEC', 'PRESI', 'PSIEB', 'PUMED', 'Reconfigurar por cobertura', 'Verificar Disponibilidad','Pendiente Provisión') then 'ASIGNACION'
                             else null

@@ -41,7 +41,7 @@ class ExportFormatEnum(str, Enum):
 
 class ConceptGroupEnum(str, Enum):
     """Agrupación de conceptos por categoría funcional"""
-    ANULAR = "ANULAR"                    # ANULA, ANULA-C, ANULA-D
+    ANULAR = "ANULAR"                    # ANULA, ANULA-C, ANULA-D, ANULA-N
     RECONFIGURACION = "RECONFIGURACION"  # Premisas Extendidas, 14, RECONFIGURACION BOT
     ASIGNACION = "ASIGNACION"            # Cobertura, Conservar Numero, PETEC, PRESI, PSIEB, PUMED, etc.
     ALL = "ALL"                          # Sin filtro

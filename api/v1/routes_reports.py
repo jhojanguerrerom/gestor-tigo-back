@@ -133,7 +133,7 @@ async def get_historical_income_vs_managed(
     - **Filtros**: UEN (independiente), rango de fechas (máximo 2 meses), agrupación de conceptos
     - **Ingresos**: Todas las ofertas ingresadas (sin importar estado actual)
     - **Gestiones**: Ofertas cerradas/gestionadas
-    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D
+    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D, ANULA-N
     - **Agrupación RECONFIGURACION**: Premisas Extendidas, 14, RECONFIGURACION BOT
     - **Agrupación ASIGNACION**: Cobertura, Conservar Numero, PETEC, PRESI, PSIEB, PUMED, etc.
     - **Permisos**: SuperUsuario (1), Supervisor (3), Viewer (5)
@@ -186,7 +186,7 @@ async def get_income_by_hour(
       - Rango de días: promedio de ingresos por hora (máximo 30 días)
     - **Filtros**: Rango de fechas (opcional, por defecto día actual), agrupación de conceptos
     - **Datos**: Ingresos por hora (0-23), total y flag is_average
-    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D
+    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D, ANULA-N
     - **Agrupación RECONFIGURACION**: Premisas Extendidas, 14, RECONFIGURACION BOT
     - **Agrupación ASIGNACION**: Cobertura, Conservar Numero, PETEC, PRESI, PSIEB, PUMED, etc.
     - **Permisos**: SuperUsuario (1), Supervisor (3), Viewer (5)
@@ -240,7 +240,7 @@ async def get_daily_income_managed(
     
     - **Filtros**: Tipo de dato (INCOME/MANAGED/BOTH), rango de fechas, agrupación de conceptos
     - **Datos**: Comparación diaria configurable
-    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D
+    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D, ANULA-N
     - **Agrupación RECONFIGURACION**: Premisas Extendidas, 14, RECONFIGURACION BOT
     - **Agrupación ASIGNACION**: Cobertura, Conservar Numero, PETEC, PRESI, PSIEB, PUMED, etc.
     - **Permisos**: SuperUsuario (1), Supervisor (3), Viewer (5)
@@ -291,7 +291,7 @@ async def get_income_by_concept(
     - **Filtros**: Mes (YYYY-MM), concepto individual (opcional), agrupación de conceptos
     - **Filtros combinados**: Puede usar ambos filtros simultáneamente (ej: grupo ASIGNACION + concepto PETEC)
     - **Datos**: Distribución de ingresos por concepto cada día del mes
-    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D
+    - **Agrupación ANULAR**: ANULA, ANULA-C, ANULA-D, ANULA-N
     - **Agrupación RECONFIGURACION**: Premisas Extendidas, 14, RECONFIGURACION BOT
     - **Agrupación ASIGNACION**: Cobertura, Conservar Numero, PETEC, PRESI, PSIEB, PUMED, etc.
     - **Permisos**: SuperUsuario (1), Supervisor (3), Viewer (5)
@@ -395,7 +395,7 @@ async def get_available_offers_by_concept(
     "/export-cancellations-csv",
     dependencies=[Depends(jwt_required), Depends(require_profile([1, 3, 5]))],
     summary="Exportar CSV de ofertas canceladas",
-    description="Exporta ofertas con conceptos ANULA, ANULA-C, ANULA-D de los últimos días en formato CSV UTF-8."
+    description="Exporta ofertas con conceptos ANULA, ANULA-C, ANULA-D, ANULA-N de los últimos días en formato CSV UTF-8."
 )
 async def export_cancellations_csv(
     days_back: int = Query(default=3, ge=1, le=30, description="Días hacia atrás desde hoy"),
@@ -406,7 +406,7 @@ async def export_cancellations_csv(
     
     - **days_back**: Días hacia atrás desde hoy (default: 3, máx: 30)
     - **Formato**: CSV UTF-8 separado por comas
-    - **Conceptos**: ANULA, ANULA-C, ANULA-D
+    - **Conceptos**: ANULA, ANULA-C, ANULA-D, ANULA-N
     - **Permisos**: SuperUsuario (1), Supervisor (3), Viewer (5)
     """
     service = ReportService(db)
