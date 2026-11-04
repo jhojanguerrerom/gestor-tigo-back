@@ -24,7 +24,10 @@ CONCEPTS_ANULAR = ['ANULA', 'ANULA-C', 'ANULA-D', 'ANULA-N']
 CONCEPTS_RECONFIGURACION = ['Premisas Extendidas', '14', 'RECONFIGURACION BOT']
 CONCEPTS_ASIGNACION = [
     'Cobertura', 'Conservar Numero', 'PETEC', 'PRESI', 'PSIEB', 'PUMED',
-    'Reconfigurar por cobertura', 'Verificar Disponibilidad'
+    'Reconfigurar por cobertura', 'Verificar Disponibilidad', 'ANINS', '21', 'Envío diseño',
+    'MALO', 'Normalizacion', 'PEEXP', 'Pendiente Provisión', 'Pendiente Provisión Tercero',
+    'PSERV', 'RECONFIGURACION MANUAL', 'Reconfigurar x disponibilidad', 'Sin_Pendiente',
+    'TERCE', 
 ]
 
 
@@ -61,8 +64,8 @@ class ReportRepository:
             ).filter(
                 and_(
                     func.date(func.timezone('America/Bogota', OfertaGestionDetalle.fecha_gestion)) == today,
-                    func.date_part('hour', func.timezone('America/Bogota', OfertaGestionDetalle.fecha_gestion)) >= 6,
-                    func.date_part('hour', func.timezone('America/Bogota', OfertaGestionDetalle.fecha_gestion)) <= 21
+                    func.date_part('hour', func.timezone('America/Bogota', OfertaGestionDetalle.fecha_gestion)) >= 4,
+                    func.date_part('hour', func.timezone('America/Bogota', OfertaGestionDetalle.fecha_gestion)) <= 23
                 )
             ).group_by(
                 OfertaGestionDetalle.usuario_login,
@@ -722,9 +725,16 @@ class ReportRepository:
             start_timestamp = datetime.combine(date_from, datetime.min.time())
             end_timestamp = datetime.combine(date_to, datetime.max.time())
             
-            # Query base con CTEs (Raw SQL) usando TIMEZONE('America/Bogota', ...)
             sql_query = text("""
-                WITH estados AS (
+                WITH historico_abierto AS (
+                    SELECT
+                        emh.oferta,
+                        emh.created_at,
+                        ROW_NUMBER() OVER (PARTITION BY emh.oferta ORDER BY emh.created_at, emh.id) AS rn_hist
+                    FROM enlistment_manager_history emh
+                    WHERE emh.estado_oferta = 'ABIERTO'
+                ),
+                estados AS (
                     SELECT
                         ohe.oferta,
                         ohe.usuario_login,
@@ -741,7 +751,8 @@ class ReportRepository:
                         usuario_login,
                         usuario_nombre,
                         fecha_asignacion,
-                        fecha_gestion
+                        fecha_gestion,
+                        ROW_NUMBER() OVER (PARTITION BY oferta ORDER BY fecha_gestion) AS rn_cierre
                     FROM estados
                     WHERE siguiente_estado = 'CERRADO' AND fecha_gestion IS NOT NULL
                 ),
@@ -752,6 +763,8 @@ class ReportRepository:
                         c.usuario_nombre,
                         c.fecha_asignacion,
                         c.fecha_gestion,
+                        ha.created_at AS fecha_ingreso_gestor,
+                        eh_cierre.campos_dinamicos AS campos_dinamicos_cierre,
                         oac.nombre_accion,
                         osc.nombre_subaccion,
                         ogd.observacion,
@@ -759,6 +772,16 @@ class ReportRepository:
                         ABS(EXTRACT(EPOCH FROM (c.fecha_gestion - TIMEZONE('America/Bogota', ogd.fecha_gestion)))) * 1000 AS diferencia_ms,
                         ROW_NUMBER() OVER (PARTITION BY c.oferta, c.fecha_gestion ORDER BY ABS(EXTRACT(EPOCH FROM (c.fecha_gestion - TIMEZONE('America/Bogota', ogd.fecha_gestion))))) AS rn
                     FROM cierres c
+                    LEFT JOIN historico_abierto ha ON ha.oferta = c.oferta AND ha.rn_hist = c.rn_cierre
+                    LEFT JOIN LATERAL (
+                        SELECT emh.campos_dinamicos
+                        FROM enlistment_manager_history emh
+                        WHERE emh.oferta = c.oferta
+                            AND emh.estado_oferta = 'CERRADO'
+                            AND TIMEZONE('America/Bogota', emh.created_at) BETWEEN c.fecha_gestion - INTERVAL '2 second' AND c.fecha_gestion + INTERVAL '2 second'
+                        ORDER BY ABS(EXTRACT(EPOCH FROM (TIMEZONE('America/Bogota', emh.created_at) - c.fecha_gestion)))
+                        LIMIT 1
+                    ) eh_cierre ON TRUE
                     LEFT JOIN oferta_gestion_detalle ogd ON ogd.oferta = c.oferta 
                         AND TIMEZONE('America/Bogota', ogd.fecha_gestion) BETWEEN c.fecha_gestion - INTERVAL '1 second' AND c.fecha_gestion + INTERVAL '1 second'
                     LEFT JOIN oferta_accion_catalogo oac ON oac.id = ogd.accion_id
@@ -769,6 +792,7 @@ class ReportRepository:
                         em.oferta,
                         gm.usuario_login,
                         gm.usuario_nombre,
+                        cd.concepto_original,
                         cd.concepto,
                         cd.producto,
                         cd.uen,
@@ -795,9 +819,7 @@ class ReportRepository:
                         cd.municipio,
                         cd.pedido_crm,
                         cd.usuario_pendiente,
-                        -- Fecha de ingreso de la oferta al gestor con zona horaria de Bogotá y formato DD-MM-YYYY HH:MI:SS
-                        TO_CHAR(TIMEZONE('America/Bogota', em.created_at), 'DD-MM-YYYY HH24:MI:SS') AS fecha_ingreso_gestor,
-                        -- Demás fechas formateadas a DD-MM-YYYY HH:MI:SS
+                        TO_CHAR(TIMEZONE('America/Bogota', gm.fecha_ingreso_gestor), 'DD-MM-YYYY HH24:MI:SS') AS fecha_ingreso_gestor,
                         TO_CHAR(gm.fecha_asignacion, 'DD-MM-YYYY HH24:MI:SS') AS fecha_asignacion,
                         TO_CHAR(gm.fecha_gestion, 'DD-MM-YYYY HH24:MI:SS') AS fecha_gestion,
                         gm.nombre_accion,
@@ -811,8 +833,9 @@ class ReportRepository:
                         end as concepto_grupo
                     FROM gestiones_match gm
                     INNER JOIN enlistment_manager em ON em.oferta = gm.oferta
-                    CROSS JOIN LATERAL jsonb_to_record(em.campos_dinamicos) AS cd(
+                    CROSS JOIN LATERAL jsonb_to_record(gm.campos_dinamicos_cierre) AS cd(
                         concepto text,
+                        concepto_original text,
                         departamento text,
                         descripcion text,
                         documento text,
@@ -847,14 +870,13 @@ class ReportRepository:
                         WHEN ROW_NUMBER() OVER (
                                 PARTITION BY r.oferta
                                 ORDER BY r.fecha_gestion DESC
-                             ) = 1 THEN 'NO ES GARANTIA'
+                            ) = 1 THEN 'NO ES GARANTIA'
                         ELSE 'SI ES GARANTIA'
                     END AS validacion_garantia
                 FROM resultado r
                 ORDER BY r.oferta, r.fecha_gestion DESC
             """)
             
-            # Ejecutar query para datos
             params = {
                 'start_date': start_timestamp,
                 'end_date': end_timestamp
@@ -865,7 +887,6 @@ class ReportRepository:
             
             total_count = len(all_rows)
             
-            # Aplicar paginación si se especifica
             if limit is not None and offset is not None:
                 paginated_rows = all_rows[offset:offset + limit]
             else:
@@ -877,7 +898,7 @@ class ReportRepository:
         except Exception as e:
             logger.error(f"Error al obtener reporte de liquidación: {e}")
             raise
-
+        
     # ==========================================
     # REPORTES EMTELCO
     # ==========================================

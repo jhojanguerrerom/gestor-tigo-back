@@ -27,7 +27,7 @@ class OfertaGestionRepository:
     """Repository para operaciones de gestión de ofertas"""
     
     # Constante para máximo de intentos de búsqueda
-    MAX_INTENTOS_BUSQUEDA = 10  # Máximo de ofertas a revisar antes de rendirse
+    MAX_INTENTOS_BUSQUEDA = 50  # Máximo de ofertas a revisar antes de rendirse
 
     def __init__(self, db: Session):
         """Inicializa el repository con la sesión de base de datos.

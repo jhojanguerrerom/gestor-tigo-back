@@ -224,6 +224,7 @@ class LiquidationData(BaseModel):
     usuario_login: str
     usuario_nombre: str
     concepto: Optional[str]
+    concepto_original: Optional[str]
     producto: Optional[str]
     uen: Optional[str]
     regional: Optional[str]

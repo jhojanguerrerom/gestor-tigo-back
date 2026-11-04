@@ -345,7 +345,7 @@ async def get_conceptos_con_cantidad(db: Session = Depends(get_db_pg)):
 @router.post(
     "/congelar",
     response_model=CongelarOfertaResponse,
-    dependencies=[Depends(jwt_required), Depends(require_profile([4]))],
+    dependencies=[Depends(jwt_required), Depends(require_profile([3,4]))],
     summary="Congelar/Tomar una oferta (Usuario Regular)"
 )
 async def congelar_oferta(request: Request, body: Optional[CongelarOfertaRequest] = None, db: Session = Depends(get_db_pg)):
@@ -387,7 +387,7 @@ async def congelar_oferta(request: Request, body: Optional[CongelarOfertaRequest
 @router.get(
     "/mi-oferta",
     response_model=MiOfertaResponse,
-    dependencies=[Depends(jwt_required), Depends(require_profile([4]))],
+    dependencies=[Depends(jwt_required), Depends(require_profile([3,4]))],
     summary="Consultar mi oferta actual (Usuario Regular)"
 )
 async def get_mi_oferta(request: Request, db: Session = Depends(get_db_pg)):
@@ -417,7 +417,7 @@ async def get_mi_oferta(request: Request, db: Session = Depends(get_db_pg)):
 @router.post(
     "/gestionar",
     response_model=GestionarOfertaResponse,
-    dependencies=[Depends(jwt_required), Depends(require_profile([4]))],
+    dependencies=[Depends(jwt_required), Depends(require_profile([3,4]))],
     summary="Gestionar/Cerrar oferta (Usuario Regular)"
 )
 async def gestionar_oferta(request: Request, body: GestionarOfertaRequest, db: Session = Depends(get_db_pg)):

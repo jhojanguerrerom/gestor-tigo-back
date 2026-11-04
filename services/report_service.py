@@ -59,7 +59,7 @@ class ReportService:
                     users_data[user_login] = {
                         'user_login': user_login,
                         'user_name': user_name,
-                        'hours': {str(h): 0 for h in range(6, 22)},  # 6 AM - 9 PM
+                        'hours': {str(h): 0 for h in range(4, 24)},  # 4 AM - 11 PM
                         'total_user': 0,
                         'passed_to_order': 0,
                         'effectiveness_percentage': 0.0,
@@ -731,6 +731,7 @@ class ReportService:
                     'oferta': row.oferta,
                     'usuario_login': row.usuario_login,
                     'usuario_nombre': row.usuario_nombre,
+                    'concepto_original': row.concepto_original,
                     'concepto': row.concepto,
                     'producto': row.producto,
                     'uen': row.uen,
@@ -813,6 +814,7 @@ class ReportService:
                 'Oferta',
                 'Usuario Login',
                 'Usuario Nombre',
+                'Concepto Original',
                 'Concepto',
                 'Producto',
                 'UEN',
@@ -839,6 +841,7 @@ class ReportService:
                 'Municipio',
                 'Pedido CRM',
                 'Usuario Pendiente',
+                'Fecha de ingreso al gestor',
                 'Fecha Asignacion',
                 'Fecha Gestion',
                 'Nombre Accion',
@@ -854,6 +857,7 @@ class ReportService:
                     row.oferta,
                     row.usuario_login,
                     row.usuario_nombre,
+                    row.concepto_original or '',
                     row.concepto or '',
                     row.producto or '',
                     row.uen or '',
@@ -979,6 +983,7 @@ class ReportService:
                     'oferta': row.oferta,
                     'usuario_login': row.usuario_login,
                     'usuario_nombre': row.usuario_nombre,
+                    'concepto_original': row.concepto_original,
                     'concepto': row.concepto,
                     'producto': row.producto,
                     'uen': row.uen,

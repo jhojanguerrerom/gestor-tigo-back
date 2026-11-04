@@ -444,140 +444,96 @@ class AutomationService:
             logger.info(f"Registros eliminados (concepto o concepto_original = Sin_Pendiente_Abierto): {registros_eliminados_sin_pendiente}. Registros restantes: {registros_despues_sin_pendiente}")
             
             # ==========================================
-            # Bloque reemplazo de concepto basado en direcciones (ANULA-D)
+            # Bloque reemplazo de concepto basado en direcciones (ANULA-D) con Tecnología
             # ==========================================
             
-            logger.info("🔎 Iniciando validación ANULA-D por direcciones...")
+            # ==========================================
+            # Bloque corregido: ANULA-D con Dirección y Tecnología
+            # ==========================================
+            
+            logger.info("🔎 Iniciando validación ANULA-D por direcciones y tecnología...")
             
             try:
-                # Paso 1: Extraer y limpiar direcciones del dataframe con ML
-                if 'direccion' in df_merged.columns:
-                    logger.info("🤖 Paso 1: Limpiando direcciones con modelo ML...")
+                if 'direccion' in df_merged.columns and 'tecnologia' in df_merged.columns:
+                    logger.info("🤖 Paso 1: Extrayendo y limpiando direcciones con modelo ML...")
                     
-                    # Filtrar direcciones no nulas y no vacías
-                    direcciones_originales = df_merged['direccion'].dropna()
-                    direcciones_originales = direcciones_originales[direcciones_originales.astype(str).str.strip() != '']
-                    direcciones_unicas = direcciones_originales.unique().tolist()
+                    # 1. Limpiar dirección y normalizar tecnología a MAYÚSCULAS de una vez
+                    df_merged['direccion_limpia_ml'] = df_merged['direccion'].apply(
+                        lambda d: cargar_modelo_direcciones() and limpiar_direcciones_con_ml([str(d)]).get(str(d), '') if pd.notna(d) and str(d).strip() != '' else ''
+                    )
+                    df_merged['tecnologia_upper'] = df_merged['tecnologia'].astype(str).str.upper()
                     
-                    logger.info(f"   Total direcciones únicas a procesar: {len(direcciones_unicas)}")
+                    # 2. Corregir paréntesis en la máscara de válidos
+                    mask_validos = (
+                        (df_merged['direccion_limpia_ml'] != '') &
+                        (df_merged['uen'].astype(str).str.upper() != 'EMPRESARIAL')
+                    )
                     
-                    # Aplicar ML para obtener direcciones principales
-                    if direcciones_unicas:
-                        # Cargar modelo una sola vez
-                        nlp_model = cargar_modelo_direcciones()
-                        
-                        # Procesar direcciones con ML
-                        mapa_direcciones_ml = limpiar_direcciones_con_ml(direcciones_unicas)
-                        direcciones_limpias = list(set(mapa_direcciones_ml.values()))  # Eliminar duplicados
-                        
-                        logger.info(f"   ✅ Direcciones limpiadas con ML: {len(direcciones_limpias)}")
+                    # Obtener pares únicos usando la tecnología en mayúsculas
+                    pares_unicos = df_merged.loc[mask_validos, ['direccion_limpia_ml', 'tecnologia_upper']].drop_duplicates().values.tolist()
+                    
+                    if pares_unicos:
+                        logger.info(f"   Total de pares únicos (dirección, tecnología) a procesar: {len(pares_unicos)}")
                         
                         # Paso 2: Búsqueda en PostgreSQL (Gestor)
-                        logger.info("📊 Paso 2: Buscando direcciones en Gestor (PostgreSQL)...")
-#                        direcciones_encontradas_gestor = self.repository.buscar_direcciones_en_gestor(direcciones_limpias)
-                        direcciones_encontradas_gestor = False
-
-                        # Aplicar ML a las direcciones encontradas en Gestor
-                        if direcciones_encontradas_gestor:
-                            logger.info(f"   🤖 Aplicando ML a {len(direcciones_encontradas_gestor)} direcciones encontradas en Gestor...")
-                            mapa_gestor_ml = limpiar_direcciones_con_ml(direcciones_encontradas_gestor)
-                            direcciones_gestor_limpias = set(mapa_gestor_ml.values())
+                        pares_encontrados_gestor = self.repository.buscar_direcciones_en_gestor_con_tecnologia(pares_unicos)
+                        set_gestor = set((d, t) for d, t in pares_encontrados_gestor)
+                        
+                        mask_anula_gestor = df_merged.apply(
+                            lambda row: (
+                                str(row.get('uen') or '').upper() != 'EMPRESARIAL' and
+                                (row.get('direccion_limpia_ml'), row.get('tecnologia_upper')) in set_gestor
+                            ),
+                            axis=1
+                        )
+                        
+                        count_anula_gestor = mask_anula_gestor.sum()
+                        if count_anula_gestor > 0:
+                            df_merged.loc[mask_anula_gestor, 'concepto'] = 'ANULA-D'
+                            df_merged.loc[mask_anula_gestor, 'validacion_anulacion'] = 'DIRECCION'
+                            df_merged.loc[mask_anula_gestor, 'validacion_anulacion_direccion'] = 'GESTOR'
+                            df_merged.loc[mask_anula_gestor, 'tecnologia_evaluada'] = df_merged.loc[mask_anula_gestor, 'tecnologia']
+                            logger.info(f"   ✅ ANULA-D (GESTOR): {count_anula_gestor} registros marcados")
+                        
+                        # Paso 3: Filtrar pares restantes para SQL Server
+                        pares_pendientes = [
+                            (d, t) for d, t in pares_unicos 
+                            if (d, t) not in set_gestor
+                        ]
+                        
+                        if pares_pendientes:
+                            pares_encontrados_sql = self.repository.buscar_direcciones_en_gestion_operativa_con_tecnologia(pares_pendientes)
+                            set_sql = set((d, t) for d, t in pares_encontrados_sql)
                             
-                            # Marcar coincidencias en el dataframe
-                            logger.info(f"   🔍 Buscando coincidencias en el dataframe...")
-                            
-                            # Crear mapeo inverso: dirección limpia ML -> dirección original
-                            mapa_inverso = {v: k for k, v in mapa_direcciones_ml.items()}
-                            
-                            # Buscar registros que coincidan (excluir UEN EMPRESARIAL)
-                            mask_anula_gestor = df_merged.apply(
+                            mask_anula_sql = df_merged.apply(
                                 lambda row: (
-                                    pd.notna(row.get('direccion')) and
+                                    row.get('concepto') != 'ANULA-D' and
                                     str(row.get('uen') or '').upper() != 'EMPRESARIAL' and
-                                    mapa_direcciones_ml.get(str(row['direccion']), '') in direcciones_gestor_limpias
+                                    (row.get('direccion_limpia_ml'), row.get('tecnologia_upper')) in set_sql
                                 ),
                                 axis=1
                             )
                             
-                            count_anula_gestor = mask_anula_gestor.sum()
-                            if count_anula_gestor > 0:
-                                # Cambiar concepto a ANULA-D
-                                df_merged.loc[mask_anula_gestor, 'concepto'] = 'ANULA-D'
-                                df_merged.loc[mask_anula_gestor, 'validacion_anulacion'] = 'DIRECCION'
-                                
-                                # Asignar directamente validacion_anulacion_direccion (NO anidado en campos_dinamicos)
-                                df_merged.loc[mask_anula_gestor, 'validacion_anulacion_direccion'] = 'GESTOR'
-
-                                logger.info(f"   ✅ ANULA-D (GESTOR): {count_anula_gestor} registros marcados")
-                            else:
-                                logger.info(f"   ℹ️ No se encontraron coincidencias en Gestor")
-                        else:
-                            logger.info(f"   ℹ️ No se encontraron direcciones en Gestor")
+                            count_anula_sql = mask_anula_sql.sum()
+                            if count_anula_sql > 0:
+                                df_merged.loc[mask_anula_sql, 'concepto'] = 'ANULA-D'
+                                df_merged.loc[mask_anula_sql, 'validacion_anulacion'] = 'DIRECCION'
+                                df_merged.loc[mask_anula_sql, 'validacion_anulacion_direccion'] = 'GESTION_OPERATIVA'
+                                df_merged.loc[mask_anula_sql, 'tecnologia_evaluada'] = df_merged.loc[mask_anula_sql, 'tecnologia']
+                                logger.info(f"   ✅ ANULA-D (GESTION_OPERATIVA): {count_anula_sql} registros marcados")
                         
-                        # Paso 3: Obtener direcciones NO encontradas en Gestor para SQL Server
-                        logger.info("📊 Paso 3: Preparando búsqueda en Gestión Operativa (SQL Server)...")
+                        # Limpiar columnas temporales del DataFrame
+                        df_merged.drop(columns=['direccion_limpia_ml', 'tecnologia_upper'], inplace=True, errors='ignore')
                         
-                        # Direcciones que NO fueron marcadas como ANULA-D por Gestor
-                        direcciones_no_gestor = set(direcciones_limpias)
-                        if direcciones_encontradas_gestor:
-                            direcciones_gestor_limpias_set = set(mapa_gestor_ml.values())
-                            direcciones_no_gestor = direcciones_no_gestor - direcciones_gestor_limpias_set
-                        
-                        direcciones_no_gestor_list = list(direcciones_no_gestor)
-                        logger.info(f"   Direcciones pendientes para SQL Server: {len(direcciones_no_gestor_list)}")
-                        
-                        # Paso 4: Búsqueda en SQL Server (Gestión Operativa)
-                        if direcciones_no_gestor_list:
-                            logger.info(f"   🔍 Buscando en Gestión Operativa...")
-                            direcciones_encontradas_sqlserver = self.repository.buscar_direcciones_en_gestion_operativa(direcciones_no_gestor_list)
-                            
-                            # Aplicar ML a las direcciones encontradas en SQL Server
-                            if direcciones_encontradas_sqlserver:
-                                logger.info(f"   🤖 Aplicando ML a {len(direcciones_encontradas_sqlserver)} direcciones encontradas en SQL Server...")
-                                mapa_sqlserver_ml = limpiar_direcciones_con_ml(direcciones_encontradas_sqlserver)
-                                direcciones_sqlserver_limpias = set(mapa_sqlserver_ml.values())
-                                
-                                # Marcar coincidencias en el dataframe (solo las que NO fueron marcadas por Gestor)
-                                logger.info(f"   🔍 Buscando coincidencias en el dataframe...")
-                                
-                                mask_anula_sqlserver = df_merged.apply(
-                                    lambda row: (
-                                        pd.notna(row.get('direccion')) and
-                                        row.get('concepto') != 'ANULA-D' and  # No sobrescribir las ya marcadas
-                                        str(row.get('uen') or '').upper() != 'EMPRESARIAL' and
-                                        mapa_direcciones_ml.get(str(row['direccion']), '') in direcciones_sqlserver_limpias
-                                    ),
-                                    axis=1
-                                )
-                                
-                                count_anula_sqlserver = mask_anula_sqlserver.sum()
-                                if count_anula_sqlserver > 0:
-                                    # Cambiar concepto a ANULA-D
-                                    df_merged.loc[mask_anula_sqlserver, 'concepto'] = 'ANULA-D'
-                                    df_merged.loc[mask_anula_sqlserver, 'validacion_anulacion'] = 'DIRECCION'
-                                    
-                                    # Asignar directamente validacion_anulacion_direccion (NO anidado en campos_dinamicos)
-                                    df_merged.loc[mask_anula_sqlserver, 'validacion_anulacion_direccion'] = 'GESTION_OPERATIVA'
-
-                                    logger.info(f"   ✅ ANULA-D (GESTION_OPERATIVA): {count_anula_sqlserver} registros marcados")
-                                else:
-                                    logger.info(f"   ℹ️ No se encontraron coincidencias en SQL Server")
-                            else:
-                                logger.info(f"   ℹ️ No se encontraron direcciones en SQL Server")
-                        else:
-                            logger.info(f"   ℹ️ No hay direcciones pendientes para buscar en SQL Server")
-                        
-                        # Resumen final
                         total_anula_d = (df_merged['concepto'] == 'ANULA-D').sum()
-                        logger.info(f"✅ Validación ANULA-D completada. Total registros ANULA-D: {total_anula_d}")
+                        logger.info(f"✅ Validación ANULA-D por tecnología completada. Total registros ANULA-D: {total_anula_d}")
                     else:
-                        logger.info("ℹ️ No hay direcciones únicas para procesar")
+                        logger.info("ℹ️ No hay pares de dirección y tecnología válidos para procesar")
                 else:
-                    logger.warning("⚠️ Columna 'direccion' no encontrada en el dataframe")
+                    logger.warning("⚠️ Columnas 'direccion' o 'tecnologia' no encontradas en el dataframe")
                     
             except Exception as e:
-                logger.error(f"❌ Error en validación ANULA-D por direcciones: {e}", exc_info=True)
-                # No fallar el proceso completo, continuar con el resto
+                logger.error(f"❌ Error en validación ANULA-D por dirección y tecnología: {e}", exc_info=True)
                 logger.warning("⚠️ Continuando con el proceso a pesar del error en ANULA-D")
             
             # ==========================================

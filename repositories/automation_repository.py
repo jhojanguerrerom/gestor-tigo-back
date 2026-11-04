@@ -508,34 +508,34 @@ class AutomationRepository:
     # CONSULTAS VALIDACION ANULA-D
     # ==========================================
 
-    def buscar_direcciones_en_gestor(self, direcciones_limpias: List[str]) -> List[str]:
+    def buscar_direcciones_en_gestor_con_tecnologia(self, pares_direccion_tec: List[tuple]) -> List[tuple]:
         """
-        Busca direcciones en oferta_gestion_detalle y enlistment_manager (PostgreSQL).
-        Retorna las direcciones encontradas en gestiones de los últimos 60 días.
+        Busca combinaciones de dirección y tecnología en oferta_gestion_detalle y enlistment_manager (PostgreSQL).
         
         Args:
-            direcciones_limpias: Lista de direcciones limpias/formateadas con ML
+            pares_direccion_tec: Lista de tuplas (direccion_limpia, tecnologia)
             
         Returns:
-            Lista de direcciones encontradas
+            Lista de tuplas (direccion, tecnologia) encontradas
         """
-        if not direcciones_limpias:
-            logger.warning("⚠️ Lista de direcciones vacía para búsqueda en Gestor")
+        if not pares_direccion_tec:
+            logger.warning("⚠️ Lista de pares dirección-tecnología vacía para búsqueda en Gestor")
             return []
         
         try:
-            # Construir condiciones ILIKE dinámicamente
-            condiciones_ilike = []
-            for direccion in direcciones_limpias:
-                # Escapar comillas simples para SQL
+            condiciones = []
+            for direccion, tecnologia in pares_direccion_tec:
                 direccion_escaped = direccion.replace("'", "''")
-                condiciones_ilike.append(f"em.campos_dinamicos->>'direccion' ILIKE '%{direccion_escaped}%'")
+                tecnologia_escaped = tecnologia.replace("'", "''")
+                # Filtramos tanto por la dirección como por la tecnología asociada
+                condiciones.append(
+                    f"(em.campos_dinamicos->>'direccion' ILIKE '%{direccion_escaped}%' AND em.campos_dinamicos->>'tecnologia' = '{tecnologia_escaped}')"
+                )
             
-            # Unir todas las condiciones con OR
-            where_clause = " OR ".join(condiciones_ilike)
+            where_clause = " OR ".join(condiciones)
             
             query = f"""
-                SELECT DISTINCT em.campos_dinamicos->>'direccion' as direccion
+                SELECT DISTINCT em.campos_dinamicos->>'direccion' as direccion, em.campos_dinamicos->>'tecnologia' as tecnologia
                 FROM oferta_gestion_detalle ogd
                 LEFT JOIN enlistment_manager em ON em.oferta = ogd.oferta
                 WHERE ogd.accion_id IN ('40106c90-0770-464b-9f62-34c1e3ad6202') 
@@ -544,48 +544,40 @@ class AutomationRepository:
                   AND ({where_clause})
             """
             
-            logger.info(f"🔍 Buscando {len(direcciones_limpias)} direcciones en Gestor (PostgreSQL)...")
+            logger.info(f"🔍 Buscando {len(pares_direccion_tec)} pares dirección-tecnología en Gestor (PostgreSQL)...")
             result = self.db_pg.execute(text(query))
             
-            # Extraer direcciones encontradas
-            direcciones_encontradas = [row[0] for row in result.fetchall() if row[0]]
-            
-            logger.info(f"✅ Encontradas {len(direcciones_encontradas)} direcciones en Gestor")
-            return direcciones_encontradas
+            encontrados = [(row[0], row[1]) for row in result.fetchall() if row[0] and row[1]]
+            logger.info(f"✅ Encontrados {len(encontrados)} registros coincidentes en Gestor")
+            return encontrados
             
         except Exception as e:
-            logger.error(f"❌ Error al buscar direcciones en Gestor: {e}")
+            logger.error(f"❌ Error al buscar direcciones con tecnología en Gestor: {e}")
             raise
 
-    def buscar_direcciones_en_gestion_operativa(self, direcciones_limpias: List[str]) -> List[str]:
+    def buscar_direcciones_en_gestion_operativa_con_tecnologia(self, pares_direccion_tec: List[tuple]) -> List[tuple]:
         """
-        Busca direcciones en FacPedidos_SSMM (SQL Server).
-        Retorna las direcciones encontradas en pedidos de los últimos 60 días.
-        
-        Args:
-            direcciones_limpias: Lista de direcciones limpias/formateadas con ML
-            
-        Returns:
-            Lista de direcciones encontradas
+        Busca combinaciones de dirección y tecnología en FacPedidos_SSMM (SQL Server).
         """
-        if not direcciones_limpias:
-            logger.warning("⚠️ Lista de direcciones vacía para búsqueda en Gestión Operativa")
+        if not pares_direccion_tec:
+            logger.warning("⚠️ Lista de pares dirección-tecnología vacía para búsqueda en Gestión Operativa")
             return []
         
         db_sqlserver = SessionLocalSQLServerGestion()
         try:
-            # Construir condiciones LIKE dinámicamente
-            condiciones_like = []
-            for direccion in direcciones_limpias:
-                # Escapar comillas simples para SQL
+            condiciones = []
+            for direccion, tecnologia in pares_direccion_tec:
                 direccion_escaped = direccion.replace("'", "''")
-                condiciones_like.append(f"A.direccion LIKE '%{direccion_escaped}%'")
+                tecnologia_escaped = tecnologia.replace("'", "''")
+                # Se asume que la tabla o vista en SQL Server posee un campo de tecnología (ej. tecnologia o similar)
+                condiciones.append(
+                    f"(A.direccion LIKE '%{direccion_escaped}%' AND A.tecnologia = '{tecnologia_escaped}')"
+                )
             
-            # Unir todas las condiciones con OR
-            where_clause = " OR ".join(condiciones_like)
+            where_clause = " OR ".join(condiciones)
             
             query = f"""
-                SELECT DISTINCT A.direccion
+                SELECT DISTINCT A.direccion, A.tecnologia
                 FROM dbo.FacPedidos_SSMM A WITH (NOLOCK) 
                 WHERE A.FECHA BETWEEN DATEADD(DAY, -60, GETDATE()) AND DATEADD(DAY, 1, GETDATE())
                   AND A.ESTADO_CLICK IN ('Incompleto','FallidaConVisita','FallidaSinVisita')
@@ -593,17 +585,15 @@ class AutomationRepository:
                   AND ({where_clause})
             """
             
-            logger.info(f"🔍 Buscando {len(direcciones_limpias)} direcciones en Gestión Operativa (SQL Server)...")
+            logger.info(f"🔍 Buscando {len(pares_direccion_tec)} pares dirección-tecnología en Gestión Operativa (SQL Server)...[cite: 9]")
             result = db_sqlserver.execute(text(query))
             
-            # Extraer direcciones encontradas
-            direcciones_encontradas = [row[0] for row in result.fetchall() if row[0]]
-            
-            logger.info(f"✅ Encontradas {len(direcciones_encontradas)} direcciones en Gestión Operativa")
-            return direcciones_encontradas
+            encontrados = [(row[0], row[1]) for row in result.fetchall() if row[0] and row[1]]
+            logger.info(f"✅ Encontrados {len(encontrados)} registros coincidentes en Gestión Operativa")
+            return encontrados
             
         except Exception as e:
-            logger.error(f"❌ Error al buscar direcciones en Gestión Operativa: {e}")
+            logger.error(f"❌ Error al buscar direcciones con tecnología en Gestión Operativa: {e}")
             raise
         finally:
             db_sqlserver.close()
